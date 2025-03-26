@@ -2,6 +2,8 @@ import { Box, Typography, Button, FormControl, InputLabel, Select, MenuItem } fr
 import { ParkingSpace } from '../types';
 import { Waves } from './ui/waves-background';
 import { SelectChangeEvent } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import LogoutIcon from '@mui/icons-material/Logout';
 
 // City coordinates (same as in Map.tsx)
 const cities = {
@@ -153,8 +155,14 @@ export default function Sidebar({
   selectedCity,
   selectedStreet,
 }: SidebarProps) {
+  const navigate = useNavigate();
   // Get streets for the selected city
   const streets = selectedCity ? streetsByCity[selectedCity as keyof typeof streetsByCity] || [] : [];
+
+  const handleLogout = () => {
+    // Here you could add any logout logic (clear tokens, etc.)
+    navigate('/login');
+  };
 
   return (
     <Box
@@ -283,6 +291,23 @@ export default function Sidebar({
             )}
           </Box>
         )}
+
+        <Box sx={{ flexGrow: 1 }} />
+        
+        <Button
+          variant="outlined"
+          color="error"
+          startIcon={<LogoutIcon />}
+          onClick={handleLogout}
+          sx={{ 
+            mt: 'auto',
+            borderRadius: 2,
+            py: 1
+          }}
+          fullWidth
+        >
+          Logout
+        </Button>
       </Box>
     </Box>
   );

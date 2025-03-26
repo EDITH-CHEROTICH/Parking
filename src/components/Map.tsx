@@ -244,7 +244,7 @@ export default function Map() {
       const street = streetsByCity[selectedCity].find(s => s.name === selectedStreet);
       if (street) {
         setCenter({ lat: street.lat, lng: street.lng });
-        setZoom(15);
+      setZoom(15);
         setVisibleSpaces(generateParkingSpaces(selectedCity, selectedStreet));
       }
     }
@@ -401,7 +401,6 @@ export default function Map() {
     
     // First switch to satellite view
     setMapType('satellite');
-    mapRef.setMapTypeId('satellite');
     
     // Set clicked location for reference
     setClickedLocation(location);
@@ -419,6 +418,7 @@ export default function Map() {
       fullscreenControl: true
     });
     
+    // Set the panorama and update state
     setPanorama(newPanorama);
     mapRef.setStreetView(newPanorama);
     setShowStreetView(true);
@@ -437,14 +437,9 @@ export default function Map() {
           space.location.lng
         );
         
-        const heading = google.maps.geometry.spherical.computeHeading(
-          data.location.latLng!, 
-          parkingSpotLocation
-        );
-        
         // Set the POV to look at the parking spot
         newPanorama.setPov({
-          heading: heading,
+          heading: 0,
           pitch: 0
         });
         
@@ -454,7 +449,7 @@ export default function Map() {
         
         const highlightMarker = new google.maps.Marker({
           position: space.location,
-          map: mapRef,
+          map: newPanorama,
           icon: {
             path: google.maps.SymbolPath.CIRCLE,
             scale: 10,
@@ -464,40 +459,10 @@ export default function Map() {
             strokeWeight: 2,
           },
           title: `Parking Space ${space.spaceNumber}`,
-          animation: google.maps.Animation.BOUNCE,
-          optimized: false,
-          zIndex: 100
+          animation: google.maps.Animation.BOUNCE
         });
         
         setMarker360(highlightMarker);
-        
-        // Show guidance tooltip
-        const parkingSpotDiv = document.createElement('div');
-        parkingSpotDiv.className = 'parking-spot-indicator';
-        parkingSpotDiv.innerHTML = `
-          <div style="
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-          ">
-            <span style="color: ${space.status === 'available' ? '#4CAF50' : '#F44336'};">●</span>
-            Your selected parking spot ${space.spaceNumber}
-          </div>
-        `;
-        
-        // Add the indicator after a small delay to ensure panorama is loaded
-        setTimeout(() => {
-          const panoramaContainer = mapRef.getDiv().querySelector('.gm-style-cc');
-          if (panoramaContainer) {
-            panoramaContainer.parentNode?.insertBefore(parkingSpotDiv, panoramaContainer);
-          }
-        }, 500);
       }
     });
   }, [mapRef]);
@@ -702,16 +667,15 @@ export default function Map() {
               sx={{ position: 'absolute', top: 16, right: 16, zIndex: 12 }}
               onClick={() => {
                 if (mapRef) {
+                  // Reset the street view to null
                   mapRef.setStreetView(null);
                   setShowStreetView(false);
+                  
                   // Remove the highlight marker
                   if (marker360) {
                     marker360.setMap(null);
                     setMarker360(null);
                   }
-                  // Remove any custom DOM elements
-                  const indicators = document.querySelectorAll('.parking-spot-indicator');
-                  indicators.forEach(el => el.remove());
                 }
               }}
             >
@@ -735,21 +699,21 @@ export default function Map() {
             >
               <PanoramaPhotosphereIcon color="primary" />
               <Typography variant="body2">
-                Spot {selectedSpace?.spaceNumber} - Look for the bouncing marker
-              </Typography>
+                360° View - Press ESC or click X to exit
+            </Typography>
             </Box>
             
             {/* Add a mini-map with the spot location */}
-            <Box
-              sx={{
-                position: 'absolute',
+              <Box
+                sx={{
+                  position: 'absolute',
                 bottom: 16,
-                right: 16,
+                  right: 16,
                 zIndex: 12,
-                bgcolor: 'background.paper',
+                  bgcolor: 'background.paper',
                 p: 1,
-                borderRadius: 1,
-                boxShadow: 3,
+                  borderRadius: 1,
+                  boxShadow: 3,
                 width: 150,
                 height: 150,
                 overflow: 'hidden'
@@ -934,7 +898,7 @@ export default function Map() {
                     <Grid item xs={6}>
                       <Typography variant="body2" fontWeight="medium">
                         {bookedSpace.bookingDuration}
-                      </Typography>
+                </Typography>
                     </Grid>
                     
                     <Grid item xs={6}>
@@ -943,16 +907,16 @@ export default function Map() {
                     <Grid item xs={6}>
                       <Typography variant="body2" fontWeight="medium">
                         {new Date(bookedSpace.bookingTime).toLocaleTimeString()}
-                      </Typography>
+                </Typography>
                     </Grid>
                   </Grid>
                 </Box>
               </Box>
               
               <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                <Button 
-                  variant="contained"
-                  color="primary"
+                  <Button
+                    variant="contained"
+                    color="primary"
                   onClick={() => {
                     setPaymentSuccess(false);
                     // Center map on the booked space
@@ -969,7 +933,7 @@ export default function Map() {
                   onClick={() => setPaymentSuccess(false)}
                 >
                   Close
-                </Button>
+                  </Button>
               </Box>
             </motion.div>
           </AnimatePresence>
@@ -1027,10 +991,10 @@ export default function Map() {
                 url: space.bookedBy === 'current-user'
                   ? '//maps.google.com/mapfiles/ms/icons/blue-dot.png' // User's booked space
                   : space.status === 'available'
-                    ? '//maps.google.com/mapfiles/ms/icons/green-dot.png'
-                    : space.status === 'expiring'
-                      ? '//maps.google.com/mapfiles/ms/icons/yellow-dot.png'
-                      : '//maps.google.com/mapfiles/ms/icons/red-dot.png',
+                  ? '//maps.google.com/mapfiles/ms/icons/green-dot.png'
+                  : space.status === 'expiring'
+                    ? '//maps.google.com/mapfiles/ms/icons/yellow-dot.png'
+                    : '//maps.google.com/mapfiles/ms/icons/red-dot.png',
                 scaledSize: new window.google.maps.Size(
                   space.bookedBy === 'current-user' ? 30 : 20, // Larger marker for user's booking
                   space.bookedBy === 'current-user' ? 30 : 20
@@ -1082,22 +1046,24 @@ export default function Map() {
                   size="small"
                   startIcon={<ThreeSixtyIcon />}
                   onClick={() => {
-                    const location = new google.maps.LatLng(
-                      selectedSpace.location.lat,
-                      selectedSpace.location.lng
-                    );
-                    handleStreetViewOpen(location, selectedSpace);
+                    if (selectedSpace) {
+                      const location = new google.maps.LatLng(
+                        selectedSpace.location.lat,
+                        selectedSpace.location.lng
+                      );
+                      handleStreetViewOpen(location, selectedSpace);
+                    }
                   }}
                 >
                   360° View
                 </Button>
-                <IconButton
-                  size="small"
-                  sx={{ position: 'absolute', top: 8, right: 8 }}
-                  onClick={() => setSelectedSpace(null)}
-                >
-                  <CloseIcon />
-                </IconButton>
+              <IconButton
+                size="small"
+                sx={{ position: 'absolute', top: 8, right: 8 }}
+                onClick={() => setSelectedSpace(null)}
+              >
+                <CloseIcon />
+              </IconButton>
               </Box>
             </Box>
           )}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -9,10 +9,7 @@ import {
   Typography,
   Box,
   CircularProgress,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+  InputAdornment,
 } from '@mui/material';
 import { ParkingSpace } from '../types';
 
@@ -30,16 +27,20 @@ export default function PaymentDialog({
   onPaymentComplete,
 }: PaymentDialogProps) {
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [duration, setDuration] = useState(1); // Default 1 hour
-  const [loading, setLoading] = useState(false);
+  const [duration, setDuration] = useState(1);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const totalAmount = parkingSpace.pricePerHour * duration;
 
+  // Format phone number to the required format
   const formatPhoneNumber = (phone: string): string => {
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.startsWith('0')) {
       return '254' + cleaned.slice(1);
+    }
+    if (cleaned.startsWith('254')) {
+      return cleaned;
     }
     if (cleaned.startsWith('7')) {
       return '254' + cleaned;
@@ -47,91 +48,127 @@ export default function PaymentDialog({
     return cleaned;
   };
 
-  const handlePayment = () => {
-    setLoading(true);
+  const handlePayment = async () => {
     setError(null);
+    
+    // Basic validation
+    if (!phoneNumber || phoneNumber.length < 10) {
+      setError('Please enter a valid phone number.');
+      return;
+    }
 
-    // Simulate API call to backend
-    setTimeout(() => {
-      setLoading(false);
+    setIsProcessing(true);
+    
+    try {
+      // Format the phone number for the API
+      const formattedPhoneNumber = formatPhoneNumber(phoneNumber);
       
-      // In a real app, you'd make an actual API call here
-      // const response = await fetch('/api/payments', { method: 'POST', body: JSON.stringify(paymentDetails) });
-      // const data = await response.json();
+      console.log('Sending payment request to backend:', {
+        phoneNumber: formattedPhoneNumber, 
+        amount: totalAmount
+      });
       
-      // Simulate successful response
-      const mockResponse = { status: 200, message: 'Payment successful' };
-      onPaymentComplete(parkingSpace, mockResponse);
-    }, 2000); // Simulate 2 second processing time
-  };
-
-  const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const cleaned = value.replace(/\D/g, '').slice(0, 10);
-    setPhoneNumber(cleaned);
-    if (error) setError(null);
+      // Send the request to the Flask backend
+      const response = await fetch('http://localhost:5000/initiate_payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phoneNumber: formattedPhoneNumber,
+          amount: totalAmount
+        }),
+      });
+      
+      const data = await response.json();
+      console.log('Payment response:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Payment failed. Please try again.');
+      }
+      
+      // Create a response object with status 200 to indicate success
+      const successResponse = { 
+        status: 200, 
+        message: 'Payment initiated successfully',
+        data: data 
+      };
+      
+      onPaymentComplete(parkingSpace, successResponse);
+    } catch (error) {
+      console.error('Payment error:', error);
+      setError(error instanceof Error ? error.message : 'Payment failed. Please try again.');
+      setIsProcessing(false);
+    }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Pay for Parking Space {parkingSpace.spaceNumber}</DialogTitle>
+    <Dialog open={open} onClose={isProcessing ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Parking Payment</DialogTitle>
       <DialogContent>
-        <Box sx={{ mt: 2 }}>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Duration</InputLabel>
-            <Select
+        <Box sx={{ p: 1 }}>
+          <Typography variant="h6" gutterBottom>
+            Space Details:
+          </Typography>
+          <Typography>
+            Space Number: {parkingSpace.spaceNumber}
+          </Typography>
+          <Typography>
+            Price: KES {parkingSpace.pricePerHour}/hour
+          </Typography>
+          
+          <Box sx={{ my: 3 }}>
+            <TextField
+              fullWidth
+              label="Duration (hours)"
+              type="number"
               value={duration}
-              label="Duration"
-              onChange={(e) => setDuration(Number(e.target.value))}
-            >
-              {[1, 2, 3, 4, 6, 8, 12, 24].map((hours) => (
-                <MenuItem key={hours} value={hours}>
-                  {hours} {hours === 1 ? 'hour' : 'hours'}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <Box sx={{ my: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-            <Typography variant="body1" gutterBottom>
-              Price per hour: KES {parkingSpace.pricePerHour}
-            </Typography>
-            <Typography variant="body1" gutterBottom>
-              Duration: {duration} {duration === 1 ? 'hour' : 'hours'}
-            </Typography>
-            <Typography variant="h6" color="primary" sx={{ mt: 1 }}>
-              Total Amount: KES {totalAmount}
-            </Typography>
+              onChange={(e) => setDuration(Math.max(1, parseInt(e.target.value)))}
+              inputProps={{ min: 1, max: 24 }}
+              disabled={isProcessing}
+              sx={{ mb: 2 }}
+            />
+            
+            <TextField
+              fullWidth
+              label="Phone Number (M-PESA)"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="07XXXXXXXX"
+              disabled={isProcessing}
+              error={!!error}
+              helperText={error}
+              InputProps={{
+                startAdornment: <InputAdornment position="start">+</InputAdornment>,
+              }}
+            />
           </Box>
-
-          <TextField
-            fullWidth
-            label="Phone Number"
-            placeholder="07XXXXXXXX"
-            value={phoneNumber}
-            onChange={handlePhoneNumberChange}
-            margin="normal"
-            helperText={error || "Enter your M-Pesa phone number starting with 07"}
-            error={!!error}
-            inputProps={{
-              inputMode: 'numeric',
-              pattern: '[0-9]*'
-            }}
-          />
+          
+          <Typography variant="h6" sx={{ mt: 2 }}>
+            Total Amount: KES {totalAmount}
+          </Typography>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            You will receive an M-PESA prompt on your phone to complete the payment.
+          </Typography>
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button 
+          onClick={onClose} 
+          disabled={isProcessing}
+          variant="outlined"
+        >
           Cancel
         </Button>
-        <Button
-          onClick={handlePayment}
-          variant="contained"
+        <Button 
+          onClick={handlePayment} 
+          variant="contained" 
           color="primary"
-          disabled={loading || !phoneNumber.match(/^(0?7\d{8})$/)}
-          startIcon={loading ? <CircularProgress size={20} /> : null}
+          disabled={isProcessing}
+          startIcon={isProcessing ? <CircularProgress size={20} /> : null}
         >
-          {loading ? 'Processing...' : `Pay KES ${totalAmount}`}
+          {isProcessing ? 'Processing...' : 'Pay Now'}
         </Button>
       </DialogActions>
     </Dialog>
